@@ -781,17 +781,14 @@ int main(int argc, char *argv[])
         switch(gameMode)
         {
             case START_SCREEN:
-                menus.MenuUpdate(elapsed);
                 menus.MainMenuProcess(game);
                 menus.MainMenuRender(program, fontSheet);
                 break;
             case MAIN_GAME_SCREEN:
-                game.Update(elapsed);
                 game.ProcessInput(keys);
                 game.Render(program, programU);
                 break;
             case END_GAME_SCREEN:
-                menus.MenuUpdate(elapsed);
                 menus.EndMenuProcess(game);
                 menus.EndMenuRender(program, fontSheet, game);
                 break;

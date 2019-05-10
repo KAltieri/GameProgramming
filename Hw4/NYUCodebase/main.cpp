@@ -29,15 +29,15 @@ SDL_Window* displayWindow;
 GLuint LoadTexture(const char *filePath, int near);
 void drawMap(ShaderProgram& program, FlareMap& map, unsigned int fontsheet);
 float lerp(float v0, float v1, float t) { return (1.0-t)*v0 + t*v1; }
-void worldToTileCoordinates(float worldX, float worldY, int *gridX, int *gridY)
+void worldToTileCoordinates(float worldX, float worldY, int& gridX, int& gridY)
 {
-    *gridX = (int)(worldX / TILE_SIZE);
-    *gridY = (int)(worldY / -TILE_SIZE);
+    gridX = (int)(worldX / TILE_SIZE);
+    gridY = (int)(worldY / -TILE_SIZE);
 }
-void tileToWorldCoordinates(int gridX, int gridY, float *worldX, float *worldY)
+void tileToWorldCoordinates(int gridX, int gridY, float& worldX, float& worldY)
 {
-    *worldX = (float)(gridX * TILE_SIZE);
-    *worldY = (float)(gridY * -TILE_SIZE);
+    worldX = (float)(gridX * TILE_SIZE);
+    worldY = (float)(gridY * -TILE_SIZE);
 }
 
 class SheetSprite {
@@ -105,7 +105,7 @@ public:
         matrix = glm::translate(matrix, position);
         isStatic = false;
         acceleration = glm::vec3(0.0f, -0.5f, 0.0f);
-        friction = glm::vec3(1.0f, 0.0f, 0.0f);
+        friction = glm::vec3(0.4f, 0.4f, 0.0f);
         velocity = glm::vec3(0.0f, 0.0f, 0.0f);
     }
     
@@ -126,129 +126,94 @@ public:
     
     void Render(ShaderProgram& program)
     {
+        matrix = glm::mat4(1.0f);
+        matrix = glm::translate(matrix, position);
         program.SetModelMatrix(matrix);
         sprite.DrawSprite(program);
     }
-    void Update(float elapsed, FlareMap& map)
+    void Update(const Uint8* keys, float elapsed, FlareMap& map)
     {
-        matrix = glm::mat4(1.0f);
-        velocity.x = lerp(velocity.x, 0.0f, friction.x * elapsed);
-        velocity.y = lerp(velocity.y, 0.0f, friction.y * elapsed);
+        acceleration.x = 0.0f;
+        
+        if(keys[SDL_SCANCODE_LEFT])
+        {
+            acceleration.x = -1.0f;
+        }
+        if(keys[SDL_SCANCODE_RIGHT])
+        {
+            acceleration.x = 1.0f;
+        }
+
+        velocity.x = lerp(velocity.x, 0.0f, elapsed * friction.x);
+        velocity.y = lerp(velocity.y, 0.0f, elapsed * friction.y);
+        velocity.x += acceleration.x * elapsed;
         velocity.y += acceleration.y * elapsed;
         position.x += velocity.x * elapsed;
         position.y += velocity.y * elapsed;
-        int* findX = new int (0);
-        int* findY = new int (0);
-        worldToTileCoordinates(position.x, position.y, findX, findY);
-        
-        //4 checks: [*findY][*findX-1], [*findY][*findX+1], [*findY-1][*findX], [*findY+1][findX]
-        worldToTileCoordinates(position.x, position.y, findX, findY);
-        collisionChecks(*findY, *findX, map);
-        matrix = glm::translate(matrix, position);
+        botCollision(map);
+        topCollision(map);
+        leftCollision(map);
+        rightCollision(map);
     }
-    bool Collides(Entity& entity)
-    {
+    bool validPosition(FlareMap& map, int gridY, int gridX){
+        if(gridY >= 0 && gridX >= 0 && gridY < map.mapHeight && gridX < map.mapWidth)
+        {
+            return true;
+        }
         return false;
     }
-    void collisionChecks(int height, int width, FlareMap& map)
-    {
-        if(height > 14)
-        {
-            height = 14;
-            position.y += TILE_SIZE;
-        }
-        if(width > 30)
-        {
-            width = 30;
-            position.x -= TILE_SIZE;
-        }
-//        if(height < 1)
-//        {
-//            height = 1;
-//            position.y -= TILE_SIZE;
-//        }
-        if(width < 1)
-        {
-            width = 1;
-            position.x += TILE_SIZE;
-        }
-        if(map.mapData[height+1][width] != 0)
-        {
-            yBotCollisionCheck(height+1, width);
-        }
-        if(map.mapData[height][width-1] != 0)
-        {
-            xLCollisionCheck(height, width-1);
-        }
-        if(map.mapData[height][width+1] != 0)
-        {
-            xRCollisionCheck(height, width+1);
-        }
-        if(map.mapData[height-1][width] != 0)
-        {
-            yTopCollisionCheck(height-1, width);
-        }
-    }
-    void xLCollisionCheck(int height, int width)
-    {
-        float* tempX = new float(0);
-        float* tempY = new float(0);
-        tileToWorldCoordinates(width, height, tempX, tempY);
-        if(position.x - size.x/2 < *tempX + TILE_SIZE/2)
-        {
-            position.x += (*tempX + TILE_SIZE/2 - position.x - size.x/2) + 0.05f;
-        }
-    }
-    void xRCollisionCheck(int height, int width)
-    {
-        float* tempX = new float(0);
-        float* tempY = new float(0);
-        tileToWorldCoordinates(width, height, tempX, tempY);
-        if(position.x + size.x/2 > *tempX + TILE_SIZE/2)
-        {
-            position.x -= (position.x + size.x/2 - *tempX - TILE_SIZE/2) + 0.05f;
-        }
-    }
-    void yBotCollisionCheck(int height, int width)
-    {
-        float* tempX = new float(0);
-        float* tempY = new float(0);
-        tileToWorldCoordinates(width, height, tempX, tempY);
-        if(position.y - size.y/2 < *tempY+TILE_SIZE/2)
-        {
+    void botCollision(FlareMap& map){
+        int gridX, gridY;
+        worldToTileCoordinates(position.x, (position.y - 0.5 * size.y), gridX, gridY);
+        if (validPosition(map, gridY, gridX) && map.mapData[gridY][gridX] != 0) {
+            float penetration = fabs((-TILE_SIZE * gridY) - (position.y - size.y/2)); //how much the entity has gone into the floor
+            position.y += penetration; //+= cuz want to go up by penetration amount
             colBot = true;
-            position.y += (*tempY + TILE_SIZE/2 - position.y - size.y/2) + 0.05f;
+            
+        }
+        else
+        {
+            colBot = false;
         }
     }
-    void yTopCollisionCheck(int height, int width)
-    {
-        float* tempX = new float(0);
-        float* tempY = new float(0);
-        tileToWorldCoordinates(width, height, tempX, tempY);
-        if(position.y + size.y/2 > *tempY - TILE_SIZE/2)
-        {
-            position.y -= (position.y + size.y/2 - *tempY - TILE_SIZE/2) + 0.05f;
+    void topCollision(FlareMap& map){
+        int gridX, gridY;
+        worldToTileCoordinates(position.x, (position.y + 0.5 * size.y), gridX, gridY);
+        if (validPosition(map, gridY, gridX) && map.mapData[gridY][gridX] != 0) {
+            float penetration = fabs((position.y + size.y/2) - ((-TILE_SIZE * gridY)-TILE_SIZE)); //how much the entity has gone into the floor
+            position.y -= penetration; //+= cuz want to go up by penetration amount
+            
+        }
+    }
+    void leftCollision(FlareMap& map){
+        int gridX, gridY;
+        worldToTileCoordinates((position.x - 0.5 * size.x), position.y, gridX, gridY);
+        if (validPosition(map, gridY, gridX) && map.mapData[gridY][gridX] != 0) {
+            float penetration = fabs(((TILE_SIZE * gridX) + TILE_SIZE) - (position.x - size.x/2)); //how much the entity has gone into the floor
+            position.x += penetration; //+= cuz want to go up by penetration amount
+            
+        }
+    }
+    void rightCollision(FlareMap& map){
+        int gridX, gridY;
+        worldToTileCoordinates((position.x + 0.5 * size.x), position.y, gridX, gridY);
+        if (validPosition(map, gridY, gridX) && map.mapData[gridY][gridX] != 0) {
+            float penetration = fabs((TILE_SIZE * gridX) - (position.x + size.x/2)); //how much the entity has gone into the floor
+            position.x -= penetration; //+= cuz want to go up by penetration amount
+            
         }
     }
     void ProcessInput(const Uint8* keys)
     {
-        if(keys[SDL_SCANCODE_LEFT])
-        {
-            velocity.x -= TILE_SIZE;
-        }
-        if(keys[SDL_SCANCODE_RIGHT])
-        {
-            velocity.x += TILE_SIZE;
-        }
-        if(keys[SDL_SCANCODE_SPACE])
-        {
-            if(colBot)
-            {
-                std::cout << "hi" << std::endl;
-                velocity.y += 0.05f;
-                colBot = false;
-            }
-        }
+
+//        if(keys[SDL_SCANCODE_SPACE])
+//        {
+//            if(colBot)
+//            {
+//                velocity.y += 1.0f;
+//                colBot = false;
+//            }
+//        }
     }
 };
 
@@ -269,18 +234,18 @@ int main(int argc, char *argv[])
     GLuint tileSheet = LoadTexture(RESOURCE_FOLDER"sprites.png", 1);
     map.Load(RESOURCE_FOLDER"TileMapTest.txt");
     
-    float* tempX = new float(0);
-    float* tempY = new float(0);
+    float tempX = 0;
+    float tempY = 0;
     tileToWorldCoordinates(map.entities[0].x, map.entities[0].y, tempX, tempY);
-    Entity enemy2(*tempX, *tempY+TILE_SIZE);
+    Entity enemy2(tempX, tempY+TILE_SIZE);
     enemy2.sprite = SheetSprite(tileSheet, 81, TILE_SIZE);
     program.SetModelMatrix(enemy2.matrix);
     tileToWorldCoordinates(map.entities[1].x, map.entities[1].y, tempX, tempY);
-    Entity enemy1(*tempX, *tempY+TILE_SIZE);
+    Entity enemy1(tempX, tempY+TILE_SIZE);
     enemy1.sprite = SheetSprite(tileSheet, 81, TILE_SIZE);
     tileToWorldCoordinates(map.entities[2].x, map.entities[2].y, tempX, tempY);
     program.SetModelMatrix(enemy1.matrix);
-    Entity player(*tempX, *tempY+TILE_SIZE);
+    Entity player(tempX, tempY+TILE_SIZE);
     player.sprite = SheetSprite(tileSheet, 98, TILE_SIZE);
     program.SetModelMatrix(player.matrix);
     
@@ -336,17 +301,14 @@ int main(int argc, char *argv[])
         }
         while(elapsed >= FIXED_TIMESTEP)
         {
-            player.Update(FIXED_TIMESTEP, map);
-            enemy1.Update(FIXED_TIMESTEP, map);
-            enemy2.Update(FIXED_TIMESTEP, map);
+            player.Update(keys, FIXED_TIMESTEP, map);
+            enemy1.Update(keys, FIXED_TIMESTEP, map);
+            enemy2.Update(keys, FIXED_TIMESTEP, map);
             elapsed -= FIXED_TIMESTEP;
         }
         accumulator = elapsed;
-        player.Update(accumulator, map);
-        enemy1.Update(accumulator, map);
-        enemy2.Update(accumulator, map);
         
-        player.ProcessInput(keys);
+//        player.ProcessInput(keys);
 
         viewMatrix = glm::mat4(1.0f);
         viewMatrix = glm::translate(viewMatrix, glm::vec3(-player.position.x, -player.position.y, 0.0f));
