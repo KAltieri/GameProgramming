@@ -19,8 +19,6 @@
 #define RESOURCE_FOLDER "NYUCodebase.app/Contents/Resources/"
 #endif
 
-#define LEVEL_HEIGHT map.mapHeight
-#define LEVEL_WIDTH map.mapWidth
 #define TILE_SIZE 0.1f
 #define SPRITE_COUNT_X 16
 #define SPRITE_COUNT_Y 8
@@ -104,6 +102,7 @@ public:
         position = glm::vec3(x, y, 0.0f);
         matrix = glm::translate(matrix, position);
         isStatic = false;
+        isEnabled = true;
         acceleration = glm::vec3(0.0f, -0.5f, 0.0f);
         friction = glm::vec3(0.4f, 0.4f, 0.0f);
         velocity = glm::vec3(0.0f, 0.0f, 0.0f);
@@ -123,27 +122,20 @@ public:
     bool colRight;
     
     bool isStatic;
+    bool isEnabled;
     
     void Render(ShaderProgram& program)
     {
-        matrix = glm::mat4(1.0f);
-        matrix = glm::translate(matrix, position);
-        program.SetModelMatrix(matrix);
-        sprite.DrawSprite(program);
+        if(isEnabled)
+        {
+            matrix = glm::mat4(1.0f);
+            matrix = glm::translate(matrix, position);
+            program.SetModelMatrix(matrix);
+            sprite.DrawSprite(program);
+        }
     }
     void Update(const Uint8* keys, float elapsed, FlareMap& map)
     {
-        acceleration.x = 0.0f;
-        
-        if(keys[SDL_SCANCODE_LEFT])
-        {
-            acceleration.x = -1.0f;
-        }
-        if(keys[SDL_SCANCODE_RIGHT])
-        {
-            acceleration.x = 1.0f;
-        }
-
         velocity.x = lerp(velocity.x, 0.0f, elapsed * friction.x);
         velocity.y = lerp(velocity.y, 0.0f, elapsed * friction.y);
         velocity.x += acceleration.x * elapsed;
@@ -154,6 +146,31 @@ public:
         topCollision(map);
         leftCollision(map);
         rightCollision(map);
+        if(position.x - size.x/2 < 0.0f)
+        {
+            position.x += size.x/2;
+        }
+        if(position.x + size.x/2 > map.mapWidth*TILE_SIZE)
+        {
+            position.x -= size.x/2;
+        }
+        if(position.y + size.y/2 > 0.0f)
+        {
+            position.y -= size.y/2;
+        }
+        if(position.y - size.y/2 < -map.mapHeight*TILE_SIZE)
+        {
+            position.y += size.y/2;
+        }
+    }
+    void EntityCollision(Entity& entity)
+    {
+        float heightPen = fabs((position.y - entity.position.y) - (size.y + entity.size.y)/2);
+        float widthPen = fabs((position.x - entity.position.x) - (size.x + entity.size.x)/2);
+        if(heightPen <= 0.1f && widthPen < 0.1f)
+        {
+            entity.isEnabled = false;
+        }
     }
     bool validPosition(FlareMap& map, int gridY, int gridX){
         if(gridY >= 0 && gridX >= 0 && gridY < map.mapHeight && gridX < map.mapWidth)
@@ -169,7 +186,6 @@ public:
             float penetration = fabs((-TILE_SIZE * gridY) - (position.y - size.y/2)); //how much the entity has gone into the floor
             position.y += penetration; //+= cuz want to go up by penetration amount
             colBot = true;
-            
         }
         else
         {
@@ -203,17 +219,26 @@ public:
             
         }
     }
+    void jump()
+    {
+        if(colBot)
+        {
+            velocity.y += 1.0f;
+            colBot = false;
+        }
+    }
     void ProcessInput(const Uint8* keys)
     {
+        acceleration.x = 0.0f;
+        if(keys[SDL_SCANCODE_LEFT])
+        {
+            acceleration.x = -1.0f;
+        }
+        if(keys[SDL_SCANCODE_RIGHT])
+        {
+            acceleration.x = 1.0f;
+        }
 
-//        if(keys[SDL_SCANCODE_SPACE])
-//        {
-//            if(colBot)
-//            {
-//                velocity.y += 1.0f;
-//                colBot = false;
-//            }
-//        }
     }
 };
 
@@ -286,6 +311,13 @@ int main(int argc, char *argv[])
             if (event.type == SDL_QUIT || event.type == SDL_WINDOWEVENT_CLOSE) {
                 done = true;
             }
+            else if(event.type == SDL_KEYDOWN)
+            {
+                if(event.key.keysym.scancode == SDL_SCANCODE_SPACE)
+                {
+                    player.jump();
+                }
+            }
         }
         const Uint8 *keys = SDL_GetKeyboardState(NULL);
         glClear(GL_COLOR_BUFFER_BIT);
@@ -308,7 +340,10 @@ int main(int argc, char *argv[])
         }
         accumulator = elapsed;
         
-//        player.ProcessInput(keys);
+        player.EntityCollision(enemy1);
+        player.EntityCollision(enemy2);
+        
+        player.ProcessInput(keys);
 
         viewMatrix = glm::mat4(1.0f);
         viewMatrix = glm::translate(viewMatrix, glm::vec3(-player.position.x, -player.position.y, 0.0f));
@@ -358,8 +393,8 @@ void drawMap(ShaderProgram& program, FlareMap& map, unsigned int mapSheet)
     float spriteHeight = 1.0f/(float)SPRITE_COUNT_Y;
     std::vector<float> vertexData;
     std::vector<float> texCoordData;
-    for(int y=0; y < LEVEL_HEIGHT; y++) {
-        for(int x=0; x < LEVEL_WIDTH; x++) {
+    for(int y=0; y < map.mapHeight; y++) {
+        for(int x=0; x < map.mapWidth; x++) {
             
             if(map.mapData[y][x] != 0) {
             

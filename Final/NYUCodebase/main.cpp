@@ -180,12 +180,14 @@ public:
         edgeSet.push_back(glm::vec4(sprite.vertices[2], sprite.vertices[3], 1.0f, 1.0f));
         edgeSet.push_back(glm::vec4(sprite.vertices[4], sprite.vertices[5], 1.0f, 1.0f));
     }
-    void transformEdgeSet()
+    std::vector<glm::vec4> transformEdgeSet()
     {
+        std::vector<glm::vec4> temp;
         for(glm::vec4& transform : edgeSet)
         {
-            transform = matrix * transform;
+            temp.push_back(matrix * transform);
         }
+        return temp;
     }
     void Update(float elapsed)
     {
@@ -367,12 +369,14 @@ public:
             edgeSet.push_back(glm::vec4(index[add], index[add+1], 1.0f, 1.0f));
         }
     }
-    void transformEdgeSet()
+    std::vector<glm::vec4> transformEdgeSet()
     {
+        std::vector<glm::vec4> temp;
         for(glm::vec4& transform : edgeSet)
         {
-            transform = matrix * transform;
+            temp.push_back(matrix * transform);
         }
+        return temp;
     }
     std::vector<glm::vec4> edgeSet;
     std::vector<float> index;
@@ -492,8 +496,8 @@ public:
         for(Asteroid& check : asteroids)
         {
             std::pair<float,float> penetration;
-            check.transformEdgeSet();
-            player1.transformEdgeSet();
+            std::vector<glm::vec4> test1 = check.transformEdgeSet();
+            std::vector<glm::vec4> test2 = player1.transformEdgeSet();
 //            std::cout << "-----------------------------------------------\nPlayer\n" << std::endl;
 //            for(int i = 0; i < player1.edgeSet.size(); i++)
 //            {
@@ -504,8 +508,8 @@ public:
 //            {
 //                std::cout << check.edgeSet[i].x << " " << check.edgeSet[i].y << std::endl;
 //            }
-            const std::vector<std::pair<float, float>> asTest = floatPairs(check.edgeSet);
-            const std::vector<std::pair<float, float>> pTest = floatPairs(player1.edgeSet);
+            const std::vector<std::pair<float, float>> asTest = floatPairs(test1);
+            const std::vector<std::pair<float, float>> pTest = floatPairs(test2);
 //            std::cout << "-----------------------------------------------\nAsteroid\n" << std::endl;
 //            for(int i = 0; i < asTest.size(); i++)
 //            {
@@ -516,7 +520,8 @@ public:
 //            {
 //                std::cout << pTest[i].first << " " << pTest[i].second << std::endl;
 //            }
-            std::cout << std::boolalpha << CheckSATCollision(asTest, pTest, penetration) << std::endl;
+            std::cout << std::boolalpha << CheckSATCollision(floatPairs(check.transformEdgeSet()), floatPairs(player1.transformEdgeSet()), penetration) << std::endl;
+//            std::cout << std::boolalpha << CheckSATCollision(asTest, pTest, penetration) << std::endl;
 //            std::cout << "-----------------------------------------------\nPenetration\n" << std::endl;
 //            std::cout << penetration.first << " " << penetration.second << std::endl;
 //            std::cout << "-----------------------------------------------" << std::endl;
