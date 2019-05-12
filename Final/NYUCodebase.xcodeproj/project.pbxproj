@@ -17,6 +17,7 @@
 		0A908C37227E369E0042607C /* font1.png in Resources */ = {isa = PBXBuildFile; fileRef = 0A908C36227E369E0042607C /* font1.png */; };
 		0A908C39227E37A00042607C /* pixel_font.png in Resources */ = {isa = PBXBuildFile; fileRef = 0A908C38227E37A00042607C /* pixel_font.png */; };
 		0A95420D227CE2E20057E80C /* SatCollision.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 0A95420C227CE2E20057E80C /* SatCollision.cpp */; };
+		0AC47ED422877B6B007DE17A /* hit.wav in Resources */ = {isa = PBXBuildFile; fileRef = 0AC47ED322877B6B007DE17A /* hit.wav */; };
 		6D5A86AE19AE5C710066C1FD /* Cocoa.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 6D5A86AD19AE5C710066C1FD /* Cocoa.framework */; };
 		6D5A86B819AE5C710066C1FD /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 6D5A86B619AE5C710066C1FD /* InfoPlist.strings */; };
 		6D5A86BA19AE5C710066C1FD /* main.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 6D5A86B919AE5C710066C1FD /* main.cpp */; };
@@ -44,6 +45,7 @@
 		0A908C38227E37A00042607C /* pixel_font.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = pixel_font.png; sourceTree = "<group>"; };
 		0A95420B227CE2E20057E80C /* SatCollision.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = SatCollision.h; path = ../../../CS3113/code/sat_collision/SatCollision.h; sourceTree = "<group>"; };
 		0A95420C227CE2E20057E80C /* SatCollision.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = SatCollision.cpp; path = ../../../CS3113/code/sat_collision/SatCollision.cpp; sourceTree = "<group>"; };
+		0AC47ED322877B6B007DE17A /* hit.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = hit.wav; sourceTree = "<group>"; };
 		6D5A86AA19AE5C710066C1FD /* NYUCodebase.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = NYUCodebase.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		6D5A86AD19AE5C710066C1FD /* Cocoa.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Cocoa.framework; path = System/Library/Frameworks/Cocoa.framework; sourceTree = SDKROOT; };
 		6D5A86B019AE5C710066C1FD /* AppKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AppKit.framework; path = System/Library/Frameworks/AppKit.framework; sourceTree = SDKROOT; };
@@ -127,6 +129,7 @@
 				0A610AC22283AF52005CE0E6 /* shoot2.wav */,
 				0A610AC92283AF60005CE0E6 /* death.wav */,
 				0A610ACA2283AF60005CE0E6 /* death2.wav */,
+				0AC47ED322877B6B007DE17A /* hit.wav */,
 				0A610ACD2283B3B6005CE0E6 /* bensound-deepblue.mp3 */,
 				0A908C33227E36950042607C /* sheet.png */,
 				0A908C36227E369E0042607C /* font1.png */,
@@ -222,6 +225,7 @@
 				0A610ACE2283B3B6005CE0E6 /* bensound-deepblue.mp3 in Resources */,
 				6D5A86B819AE5C710066C1FD /* InfoPlist.strings in Resources */,
 				0A908C35227E36950042607C /* sheet.png in Resources */,
+				0AC47ED422877B6B007DE17A /* hit.wav in Resources */,
 				0A610ACC2283AF60005CE0E6 /* death2.wav in Resources */,
 				0A908C34227E36950042607C /* sheet.xml in Resources */,
 				6DEF23C11B96CC2600BCE792 /* fragment.glsl in Resources */,

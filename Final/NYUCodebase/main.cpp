@@ -49,6 +49,12 @@ float genRandom(float low, float high)
 class Particle
 {
 public:
+    Particle(glm::vec3 position, glm::vec3 velocity, float lifetime, glm::vec4 sColor, glm::vec4 eColor)
+    : position(position), velocity(velocity), lifetime(lifetime), startColor(sColor), endColor(eColor)
+    {
+        position.x += velocity.x * lifetime * 2;
+        position.y += velocity.y * lifetime * 2;
+    }
     glm::vec3 position;
     glm::vec3 velocity;
     glm::vec3 velocityDeviation;
@@ -61,15 +67,34 @@ public:
 class ParticleEmitter
 {
 public:
-    ParticleEmitter(unsigned int particleAmount) {}
-    ParticleEmitter(){}
-    ~ParticleEmitter(){}
+    ParticleEmitter() {}
+    ParticleEmitter(glm::vec3 position, float particleLife, unsigned int particleAmount) : position(position), maxLifetime(particleLife)
+    {
+        for(int add = 0; add < particleAmount; add++)
+        {
+            particles.push_back(Particle(glm::vec3(position), glm::vec3(genRandom(-1, 1), genRandom(-1, 1), 0.0f), genRandom(0, maxLifetime), glm::vec4(1.0f, 1.0f, 1.0f, 1.0f), glm::vec4(0.0f, 0.0f, 0.0f, 0.0f)));
+        }
+    }
     void Update(float elapsed)
     {
-        
+        matrix = glm::mat4(1.0f);
+        for(Particle& part : particles)
+        {
+            if(part.lifetime > maxLifetime)
+            {
+                part.lifetime = 0.0f;
+                part.position.x = position.x;
+                part.position.y = position.y;
+//                part.velocity = glm::vec3(genRandom(-1, 1), genRandom(-1, 1), 0.0f);
+            }
+            part.position.x += part.velocity.x * elapsed;
+            part.position.y += part.velocity.y * elapsed;
+            part.lifetime += elapsed;
+        }
     }
     void Render(ShaderProgram& program)
     {
+        program.SetModelMatrix(matrix);
         std::vector<float> vertices;
         for(int i=0; i < particles.size(); i++) {
             vertices.push_back(particles[i].position.x);
@@ -92,11 +117,43 @@ public:
     }
     
     glm::vec3 position;
-    glm::vec3 gravity;
+    glm::mat4 matrix;
     float maxLifetime;
+    std::pair<float, float> maxSpan;
     
     std::vector<Particle> particles;
     
+};
+
+class BackgroundEmitter : public ParticleEmitter
+{
+public:
+    BackgroundEmitter() {}
+    BackgroundEmitter(glm::vec3 position, float particleLife, std::pair<float,float> particleSpan, unsigned int particleAmount) : ParticleEmitter(position, particleLife, particleAmount)
+    {
+        for(int add = 0; add < particleAmount; add++)
+        {
+            glm::vec3 pos = glm::vec3(genRandom(-maxSpan.first, maxSpan.first), genRandom(-maxSpan.second, maxSpan.second), 0.0f);
+            glm::vec3 vel;
+            if(pos.x < 0 && pos.y < 0)
+            {
+                vel = glm::vec3(genRandom(-1.0, 0), genRandom(-1.0, 0), 0.0f);
+            }
+            if(pos.x < 0 && pos.y > 0)
+            {
+                vel = glm::vec3(genRandom(-1.0, 0), genRandom(0, 1.0), 0.0f);
+            }
+            if(pos.x > 0 && pos.y < 0)
+            {
+                vel = glm::vec3(genRandom(0, 1.0), genRandom(-1.0, 0), 0.0f);
+            }
+            if(pos.x > 0 && pos.y > 0)
+            {
+                vel = glm::vec3(genRandom(0, 1.0), genRandom(0, 1.0), 0.0f);
+            }
+            particles.push_back(Particle(glm::vec3(pos), glm::vec3(vel), genRandom(0, maxLifetime), glm::vec4(1.0f, 1.0f, 1.0f, 1.0f), glm::vec4(0.0f, 0.0f, 0.0f, 0.0f)));
+        }
+    }
 };
 
 class SheetSprite {
@@ -167,7 +224,7 @@ public:
         {
             sCodes.push_back(add);
         }
-        moveSpeed = 1.25f;
+        moveSpeed = 0.75f;
         rotationSpeed = moveSpeed*5;
         glm::vec3 defaultSet = glm::vec3(0.0f, 0.0f, 0.0f);
         velocity = defaultSet;
@@ -275,6 +332,19 @@ public:
         program.SetModelMatrix(matrix);
         sprite.DrawSprite(program);
     }
+    void collisionUpdate()
+    {
+        if(type == PLAYER)
+        {
+            health--;
+            Mix_PlayChannel(-1, hitSound, 0);
+        }
+        if(type == BULLET)
+        {
+            position = glm::vec3(0.0f, -20.0f, 0.0f);
+            velocity = glm::vec3(0.0f, 0.0f, 0.0f);
+        }
+    }
     glm::mat4 matrix;
     glm::vec3 position;
     glm::vec3 size;
@@ -307,7 +377,7 @@ public:
 private:
 };
 
-class Asteroid
+class Asteroid : public std::iterator<std::input_iterator_tag, Asteroid>
 {
 public:
     Asteroid(glm::vec3 position, glm::vec3 size, float rotation, std::vector<float> indices) : position(position), size(size), rotation(rotation)
@@ -316,8 +386,6 @@ public:
         matrix = glm::scale(matrix, size);
         matrix = glm::rotate(matrix, rotation, glm::vec3(0.0f, 0.0f, 1.0f));
         matrix = glm::translate(matrix, position);
-        glm::vec3 defaultSet = glm::vec3(0.0f, 0.0f, 0.0f);
-        velocity = defaultSet;
         for(float addIndex : indices)
         {
             index.push_back(addIndex);
@@ -341,8 +409,6 @@ public:
         matrix = glm::mat4(1.0f);
         position.x += velocity.x * elapsed;
         position.y += velocity.y * elapsed;
-        position.z = 0.0f;
-
         if(position.x < -1.8f)
         {
             position.x = 1.75f;
@@ -378,6 +444,10 @@ public:
         }
         return temp;
     }
+    void collisionUpdate(glm::vec4 collision)
+    {
+        collision = glm::inverse(matrix) * collision;
+    }
     std::vector<glm::vec4> edgeSet;
     std::vector<float> index;
     glm::mat4 matrix;
@@ -392,6 +462,29 @@ public:
     
     int health;
 };
+
+bool operator==(Asteroid& left, Asteroid& right)
+{
+    if(left.index.size() == right.index.size())
+    {
+        for(int check = 0; check < left.index.size(); check++)
+        {
+            if(left.index[check] != right.index[check])
+            {
+                return false;
+            }
+        }
+        if(left.matrix == right.matrix)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+bool operator!=(Asteroid& left, Asteroid& right)
+{
+    return !(left == right);
+}
 
 class Play
 {
@@ -410,17 +503,40 @@ public:
     std::vector<Entity> bullets;
     bool p2Enabled;
     bool reset;
+    bool screenShake;
+    float screenTime;
+    BackgroundEmitter background;
+    void asteroidCreation()
+    {
+        asteroids.clear();
+        for(int i = 0; i < 5; i++)
+        {
+            asteroids.push_back(Asteroid(glm::vec3(genRandom(-1,1), genRandom(-1,1), 0.0f), glm::vec3(genRandom(0.1, 0.5), genRandom(0.1,0.5), 0.5f), 0.0f, {
+                -0.5f, -0.5f,
+                0.5f, -0.5f,
+                0.5f, 0.5f,
+                -0.5f, 0.5f
+            }));
+            asteroids[i].velocity = glm::vec3(genRandom(-1,1), genRandom(-1, 1), 0.0f);
+            asteroids[i].rotation = genRandom(0, 360);
+            asteroids[i].setEdgeSet();
+        }
+    }
     void InitialSetUp(unsigned int texture)
     {
-        //add lifetime to bullets?
+        background = BackgroundEmitter(glm::vec3(0.0f, 0.0f, 0.0f), 4, std::pair<float,float>(1.0f, 1.77f), 1000);
+        screenShake = false;
+        screenTime = 0.0f;
         player1 = Entity(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.132f, 0.1f, 0.0f), 0.0f, glm::vec3(1.0f, 1.0f, 1.0f), {SDL_SCANCODE_W, SDL_SCANCODE_S, SDL_SCANCODE_A, SDL_SCANCODE_D, SDL_SCANCODE_F}, PLAYER); // pos, size, rotation, up, down, left, right, rLeft, rRight
         player2 = Entity(glm::vec3(0.25f, 0.0f, 0.0f), glm::vec3(0.132f, 0.1f, 0.0f), 0.0f, glm::vec3(1.0f, 1.0f, 1.0f), {SDL_SCANCODE_UP, SDL_SCANCODE_DOWN, SDL_SCANCODE_LEFT, SDL_SCANCODE_RIGHT, SDL_SCANCODE_SPACE}, PLAYER);
         player1.sprite = SheetSprite(texture, 0.0f/1024.0f, 941.0f/1024.0f, 112.0f/1024.0f, 75.0f/1024.0f, 0.1f);
         player1.setEdgeSet();
         player1.shootSound = Mix_LoadWAV(RESOURCE_FOLDER"shoot2.wav");
+        player1.hitSound = Mix_LoadWAV(RESOURCE_FOLDER"hit.wav");
         player2.sprite = SheetSprite(texture, 112.0f/1024.0f, 791.0f/1024.0f, 112.0f/1024.0f, 75.0f/1024.0f, 0.1f);
-        player1.friction = glm::vec3(1.0f, 1.0f, 1.0f);
-        player2.friction = glm::vec3(1.0f, 1.0f, 1.0f);
+        player2.setEdgeSet();
+        player2.shootSound = Mix_LoadWAV(RESOURCE_FOLDER"shoot2.wav");
+        player2.hitSound = Mix_LoadWAV(RESOURCE_FOLDER"hit.wav");
         if(p2Enabled)
         {
             player1.position = glm::vec3(-0.25f, 0.0f, 0.0f);
@@ -433,21 +549,9 @@ public:
         {
             bullets[i] = Entity(glm::vec3(0.0f, -20.0f, 0.0f), glm::vec3(0.1f, 0.1f, 0.0f), 0.0f, glm::vec3(0.5f, 0.5f, 0.0f), BULLET);
             bullets[i].sprite = bulletSprite;
+            bullets[i].setEdgeSet();
         }
-        for(int i = 0; i < 1; i++)
-        {
-            asteroids.push_back(Asteroid(glm::vec3(genRandom(-1,1), genRandom(-1,1), 0.0f), glm::vec3(genRandom(0.5, 1), genRandom(0.5,1), 0.5f), 0.0f, {
-                -0.5f, -0.5f,
-                0.5f, -0.5f,
-                0.5f, 0.5f,
-                -0.5f, 0.5f
-            }));
-            asteroids[i].position.x -= 1.0f;
-//            asteroids[i].velocity = glm::vec3(genRandom(0,1.5), genRandom(0, 1.5), 0.0f);
-            asteroids[i].velocity = glm::vec3(0.0f, 0.0f, 0.0f);
-            asteroids[i].rotation = genRandom(0, 360);
-            asteroids[i].setEdgeSet();
-        }
+        asteroidCreation();
         player1Score = 0;
         player2Score = 0;
     }
@@ -459,73 +563,101 @@ public:
             player2.position = glm::vec3(0.25f, 0.0f, 0.0f);
             player1.position = glm::vec3(-0.25f, 0.0f, 0.0f);
         }
-        //delete old asteroids, put in new asteroids
-        for(int i = 0; i < 1; i++)
-        {
-            asteroids.push_back(Asteroid(glm::vec3(genRandom(-1,1), genRandom(-1,1), 0.0f), glm::vec3(genRandom(0.5, 1), genRandom(0.5,1), 0.5f), 0.0f, {
-                -0.5f, -0.5f,
-                0.5f, -0.5f,
-                0.5f, 0.5f,
-                -0.5f, 0.5f
-            }));
-            asteroids[i].position.x -= 1.0f;
-            asteroids[i].velocity = glm::vec3(genRandom(0,1.5), genRandom(0, 1.5), 0.0f);
-            asteroids[i].setEdgeSet();
-        }
+        asteroidCreation();
     }
-    void Render(ShaderProgram& program, ShaderProgram& untextProgram)
+    void Render(ShaderProgram& program, ShaderProgram& untextProgram, glm::mat4 viewMatrix)
     {
-        player1.Render(program);
-        if(p2Enabled){
-            player2.Render(program);
+        if(screenShake)
+        {
+            viewMatrix = glm::mat4(1.0f);
+            viewMatrix = glm::translate(viewMatrix, glm::vec3(genRandom(0, 1), genRandom(0, 1), 0.0f));
+            program.SetViewMatrix(viewMatrix);
+            untextProgram.SetViewMatrix(viewMatrix);
+        }
+        if(!screenShake)
+        {
+            viewMatrix = glm::mat4(1.0f);
+            viewMatrix = glm::translate(viewMatrix, glm::vec3(0.0f, 0.0f, 0.0f));
+            program.SetViewMatrix(viewMatrix);
+            untextProgram.SetViewMatrix(viewMatrix);
         }
         glUseProgram(untextProgram.programID);
+        background.Render(untextProgram);
         for(Asteroid& asteroid : asteroids)
         {
             asteroid.Render(untextProgram);
         }
         glUseProgram(program.programID);
+        player1.Render(program);
+        if(p2Enabled){
+            player2.Render(program);
+        }
         for(Entity& bullet : bullets)
         {
             bullet.Render(program);
         }
+
     }
     void Update(float elapsed)
     {
+        screenTime += elapsed;
+        if(screenTime > 0.05f)
+        {
+            screenShake = false;
+            screenTime = 0.0f;
+        }
+        background.Update(elapsed);
         //collisions and health updates
         for(Asteroid& check : asteroids)
         {
             std::pair<float,float> penetration;
-            std::vector<glm::vec4> test1 = check.transformEdgeSet();
-            std::vector<glm::vec4> test2 = player1.transformEdgeSet();
-//            std::cout << "-----------------------------------------------\nPlayer\n" << std::endl;
-//            for(int i = 0; i < player1.edgeSet.size(); i++)
-//            {
-//                std::cout << player1.edgeSet[i].x << " " << player1.edgeSet[i].y << std::endl;
-//            }
-//            std::cout << "-----------------------------------------------\nAsteroid\n" << std::endl;
-//            for(int i = 0; i < check.edgeSet.size(); i++)
-//            {
-//                std::cout << check.edgeSet[i].x << " " << check.edgeSet[i].y << std::endl;
-//            }
-            const std::vector<std::pair<float, float>> asTest = floatPairs(test1);
-            const std::vector<std::pair<float, float>> pTest = floatPairs(test2);
-//            std::cout << "-----------------------------------------------\nAsteroid\n" << std::endl;
-//            for(int i = 0; i < asTest.size(); i++)
-//            {
-//                std::cout << asTest[i].first << " " << asTest[i].second << std::endl;
-//            }
-//            std::cout << "-----------------------------------------------\nPlayer\n" << std::endl;
-//            for(int i = 0; i < pTest.size(); i++)
-//            {
-//                std::cout << pTest[i].first << " " << pTest[i].second << std::endl;
-//            }
-            std::cout << std::boolalpha << CheckSATCollision(floatPairs(check.transformEdgeSet()), floatPairs(player1.transformEdgeSet()), penetration) << std::endl;
-//            std::cout << std::boolalpha << CheckSATCollision(asTest, pTest, penetration) << std::endl;
-//            std::cout << "-----------------------------------------------\nPenetration\n" << std::endl;
-//            std::cout << penetration.first << " " << penetration.second << std::endl;
-//            std::cout << "-----------------------------------------------" << std::endl;
-//
+            CheckSATCollision(floatPairs(check.transformEdgeSet()), floatPairs(player1.transformEdgeSet()), penetration);
+            if(penetration.first != 0 && penetration.second != 0)
+            {
+                screenShake = true;
+                glm::vec4 penValues = glm::vec4(penetration.first, penetration.second, 1.0f, 1.0f);
+                check.collisionUpdate(penValues);
+                player1.collisionUpdate();
+            }
+            if(p2Enabled)
+            {
+                CheckSATCollision(floatPairs(check.transformEdgeSet()), floatPairs(player2.transformEdgeSet()), penetration);
+                if(penetration.first != 0 && penetration.second != 0)
+                {
+                    screenShake = true;
+                    glm::vec4 penValues = glm::vec4(penetration.first, penetration.second, 1.0f, 1.0f);
+                    check.collisionUpdate(penValues);
+                    player2.collisionUpdate();
+                }
+            }
+            for(Entity& bullet : bullets)
+            {
+                if(bullet.position.y != -20.0f)
+                {
+                    CheckSATCollision(floatPairs(check.transformEdgeSet()), floatPairs(bullet.transformEdgeSet()), penetration);
+                    if(penetration.first != 0 && penetration.second != 0)
+                    {
+                        glm::vec4 penValues = glm::vec4(penetration.first, penetration.second, 1.0f, 1.0f);
+                        check.collisionUpdate(penValues);
+                        bullet.collisionUpdate();
+//                        search instead or just disable
+//                        asteroids.erase(std::remove_if(asteroids.begin(), asteroids.end(), check), asteroids.end());
+                    }
+                }
+            }
+            for(Asteroid& asteroid : asteroids)
+            {
+                if(asteroid != check)
+                {
+                    CheckSATCollision(floatPairs(check.transformEdgeSet()), floatPairs(asteroid.transformEdgeSet()), penetration);
+                    if(penetration.first != 0 && penetration.second != 0)
+                    {
+                        glm::vec4 penValues = glm::vec4(penetration.first, penetration.second, 1.0f, 1.0f);
+                        check.collisionUpdate(penValues);
+                        asteroid.collisionUpdate(penValues);
+                    }
+                }
+            }
         }
         player1.Update(elapsed);
         if(p2Enabled){
@@ -542,7 +674,6 @@ public:
     }
     void shoot(Entity& entity)
     {
-        entity.shoot = false;
         bullets[bulletIndex].position = entity.position;
         bullets[bulletIndex].velocity = glm::vec3(cos(entity.rotation+glm::pi<float>()/2)*2.5f, sin(entity.rotation+glm::pi<float>()/2)*2.5f, 0.0f);
         bullets[bulletIndex].rotation = entity.rotation;
@@ -575,11 +706,6 @@ private:
 class Menu
 {
 public:
-    Menu()
-    {
-        wait = 0.5f;
-    }
-    float wait;
     void DrawRectangle(ShaderProgram& program, std::vector<float> index, glm::vec3(position))
     {
         glm::mat4 matrix = glm::mat4(1.0f);
@@ -615,51 +741,29 @@ public:
         DrawText(program, fontSheet, "Replay", 0.15f, 0.00005f, glm::vec3(-0.5f, -0.45f, 0.0f));
         DrawText(program, fontSheet, "Return to Start", 0.15f, 0.00005f, glm::vec3(-1.0f, -0.75f, 0.0f));
     }
-    void MenuUpdate(float elapsed)
+    void MainMenuProcess(float xPos, float yPos, Play& game)
     {
-        wait += elapsed;
-    }
-    void MainMenuProcess(Play& game)
-    {
-        int x, y;
-        if(SDL_GetMouseState(&x, &y) && SDL_BUTTON(SDL_BUTTON_LEFT) && wait > 0.5f)
+        if(xPos < 0.0f)
         {
-            wait = 0;
-            float unitX = (((float)x / 640.0f) * 3.554f ) - 1.777f;
-            float unitY = (((float)(360-y) / 360.0f) * 2.0f ) - 1.0f;
-            if(unitX < 0.0f)
-            {
-                game.p2Enabled = false;
-                gameMode = MAIN_GAME_SCREEN;
-            }
-            else
-            {
-                game.p2Enabled = true;
-                gameMode = MAIN_GAME_SCREEN;
-            }
+            game.p2Enabled = false;
+            gameMode = MAIN_GAME_SCREEN;
+        }
+        else
+        {
+            game.p2Enabled = true;
+            gameMode = MAIN_GAME_SCREEN;
         }
     }
-    void EndMenuProcess(Play& game)
+    void EndMenuProcess(float xPos, float yPos, Play& game)
     {
-        int x, y;
-        if(SDL_GetMouseState(&x, &y) && SDL_BUTTON(SDL_BUTTON_LEFT) && wait > 0.5f)
+        if(yPos > -0.45f)
         {
-            wait = 0;
-            float unitX = (((float)x / 640.0f) * 3.554f ) - 1.777f;
-            float unitY = (((float)(360-y) / 360.0f) * 2.0f ) - 1.0f;
-            if(unitY > -0.45f)
-            {
-                game.Reset();
-                gameMode = MAIN_GAME_SCREEN;
-                unitX = 0.0f;
-                unitY = 0.0f;
-            }
-            else
-            {
-                gameMode = START_SCREEN;
-                unitX = 0.0f;
-                unitY = 0.0f;
-            }
+            game.Reset();
+            gameMode = MAIN_GAME_SCREEN;
+        }
+        else
+        {
+            gameMode = START_SCREEN;
         }
     }
 private:
@@ -705,6 +809,8 @@ int main(int argc, char *argv[])
     GLuint spriteSheet = LoadTexture(RESOURCE_FOLDER"sheet.png", 1);
     
     srand(time(NULL));
+    
+
 
 #ifdef _WINDOWS
     glewInit();
@@ -731,6 +837,23 @@ int main(int argc, char *argv[])
             if (event.type == SDL_QUIT || event.type == SDL_WINDOWEVENT_CLOSE) {
                 done = true;
             }
+            else if(event.type == SDL_MOUSEBUTTONDOWN)
+            {
+                float unitX = (((float)event.motion.x / 640.0f) * 3.554f ) - 1.777f;
+                float unitY = (((float)(360-event.motion.y) / 360.0f) * 2.0f ) - 1.0f;
+                if(event.button.button == SDL_BUTTON_LEFT)
+                {
+                    switch (gameMode) {
+                        case START_SCREEN:
+                            menus.MainMenuProcess(unitX, unitY, game);
+                            break;
+                        case MAIN_GAME_SCREEN: break;
+                        case END_GAME_SCREEN:
+                            menus.EndMenuProcess(unitX, unitY, game);
+                            break;
+                    }
+                }
+            }
         }
         glClear(GL_COLOR_BUFFER_BIT);
         
@@ -755,21 +878,15 @@ int main(int argc, char *argv[])
             }
             switch(gameMode)
             {
-                case START_SCREEN:
-                    menus.MenuUpdate(FIXED_TIMESTEP);
-                    break;
+                case START_SCREEN: break;
                 case MAIN_GAME_SCREEN:
                     game.Update(FIXED_TIMESTEP);
                     break;
-                case END_GAME_SCREEN:
-                    menus.MenuUpdate(FIXED_TIMESTEP);
-                    break;
+                case END_GAME_SCREEN: break;
             }
             elapsed -= FIXED_TIMESTEP;
         }
-        //process, update, render
         accumulator = elapsed;
-        //UPDATE
         
         if(keys[SDL_SCANCODE_M])
         {
@@ -786,15 +903,13 @@ int main(int argc, char *argv[])
         switch(gameMode)
         {
             case START_SCREEN:
-                menus.MainMenuProcess(game);
                 menus.MainMenuRender(program, fontSheet);
                 break;
             case MAIN_GAME_SCREEN:
                 game.ProcessInput(keys);
-                game.Render(program, programU);
+                game.Render(program, programU, viewMatrix);
                 break;
             case END_GAME_SCREEN:
-                menus.EndMenuProcess(game);
                 menus.EndMenuRender(program, fontSheet, game);
                 break;
         }
