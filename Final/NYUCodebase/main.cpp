@@ -30,7 +30,7 @@ GLuint LoadTexture(const char *filePath, int near);
 void DrawText(ShaderProgram &program, int fontTexture, std::string text, float size, float spacing, glm::vec3 position);
 const std::vector<std::pair<float, float>> floatPairs(std::vector<glm::vec4> vertices);
 
-enum GameState { START_SCREEN, MAIN_GAME_SCREEN, END_GAME_SCREEN};
+enum GameState { START_SCREEN, INSTRUCTION_SCREEN, MAIN_GAME_SCREEN, END_GAME_SCREEN};
 enum EntityType { PLAYER, BULLET, ASTEROID };
 
 GameState gameMode = START_SCREEN;
@@ -45,7 +45,6 @@ float genRandom(float low, float high)
     return low + static_cast <float> (rand()) / (static_cast <float> (RAND_MAX/(high-low)));
 }
 
-//use an untextured program as well
 class Particle
 {
 public:
@@ -74,9 +73,24 @@ public:
         {
             particles.push_back(Particle(glm::vec3(position), glm::vec3(genRandom(-1, 1), genRandom(-1, 1), 0.0f), genRandom(0, maxLifetime), glm::vec4(1.0f, 1.0f, 1.0f, 1.0f), glm::vec4(0.0f, 0.0f, 0.0f, 0.0f)));
         }
+        enable = true;
+    }
+    ParticleEmitter(glm::vec3 position, float emitterLife, float particleLife, unsigned int particleAmount, glm::vec4 startColor, glm::vec4 endColor) : position(position), emitterLife(emitterLife), maxLifetime(particleLife)
+    {
+        for(int add = 0; add < particleAmount; add++)
+        {
+            particles.push_back(Particle(glm::vec3(position), glm::vec3(genRandom(-1, 1), genRandom(-1, 1), 0.0f), genRandom(0, maxLifetime), startColor, endColor));
+        }
+        timer = 0.0f;
+        enable = true;
     }
     void Update(float elapsed)
     {
+        timer += elapsed;
+        if(timer > emitterLife)
+        {
+            enable = false;
+        }
         matrix = glm::mat4(1.0f);
         for(Particle& part : particles)
         {
@@ -85,7 +99,6 @@ public:
                 part.lifetime = 0.0f;
                 part.position.x = position.x;
                 part.position.y = position.y;
-//                part.velocity = glm::vec3(genRandom(-1, 1), genRandom(-1, 1), 0.0f);
             }
             part.position.x += part.velocity.x * elapsed;
             part.position.y += part.velocity.y * elapsed;
@@ -116,9 +129,12 @@ public:
         glDrawArrays(GL_POINTS, 0, particles.size());
     }
     
+    bool enable;
     glm::vec3 position;
     glm::mat4 matrix;
     float maxLifetime;
+    float emitterLife;
+    float timer;
     std::pair<float, float> maxSpan;
     
     std::vector<Particle> particles;
@@ -229,6 +245,8 @@ public:
         glm::vec3 defaultSet = glm::vec3(0.0f, 0.0f, 0.0f);
         velocity = defaultSet;
         acceleration = defaultSet;
+        time = 0.0f;
+        health = 5;
     }
     void setEdgeSet()
     {
@@ -248,7 +266,6 @@ public:
     }
     void Update(float elapsed)
     {
-        //process collisions
         matrix = glm::mat4(1.0f);
         velocity.x = lerp(velocity.x, 0.0f, friction.x * elapsed);
         velocity.y = lerp(velocity.y, 0.0f, friction.y * elapsed);
@@ -262,16 +279,16 @@ public:
             time += elapsed;
             if(time >= 1.0f)
             {
-                canShoot = true;
+                shoot = true;
                 time = 0.0f;
             }
-            if(position.x - size.x/2 < -1.8f)
+            if(position.x - size.x/2 < -1.9f)
             {
                 position.x = 1.75f;
             }
             if(position.x + size.x/2 > 1.8f)
             {
-                position.x = -1.75f;
+                position.x = -1.7f;
             }
             if(position.y - size.y/2 < -1.01f)
             {
@@ -317,15 +334,6 @@ public:
         {
             rotation = 0;
         }
-        if(keys[sCodes[4]]) // shoot
-        {
-            if(canShoot)
-            {
-                Mix_PlayChannel( -1, shootSound, 0);
-                canShoot = false;
-                shoot = true;
-            }
-        }
     }
     void Render(ShaderProgram& program)
     {
@@ -361,7 +369,6 @@ public:
     
     int health;
     float time;
-    bool canShoot;
     bool shoot;
     
     std::vector<SDL_Scancode> sCodes;
@@ -380,7 +387,7 @@ private:
 class Asteroid : public std::iterator<std::input_iterator_tag, Asteroid>
 {
 public:
-    Asteroid(glm::vec3 position, glm::vec3 size, float rotation, std::vector<float> indices) : position(position), size(size), rotation(rotation)
+    Asteroid(glm::vec3 position, glm::vec3 size, float rotation, glm::vec3 velocity, std::vector<float> indices) : position(position), size(size), rotation(rotation), velocity(velocity)
     {
         matrix = glm::mat4(1.0f);
         matrix = glm::scale(matrix, size);
@@ -395,6 +402,8 @@ public:
             index[mod] *= size.x;
             index[mod+1] *= size.y;
         }
+        isEnable = true;
+        setEdgeSet();
     }
     void Render(ShaderProgram& program)
     {
@@ -447,6 +456,28 @@ public:
     void collisionUpdate(glm::vec4 collision)
     {
         collision = glm::inverse(matrix) * collision;
+        if(fabs(collision.x) > fabs(collision.y))
+        {
+            if(collision.x < 0.0f)
+            {
+                velocity.x *= -1;
+            }
+//            if(velocity.x < 0.0f && collision.x > 0.0f)
+//            {
+//                velocity.x *= -1;
+//            }
+        }
+        else
+        {
+            if(collision.y < 0.0f)
+            {
+                velocity.y *= -1;
+            }
+//            if(velocity.y < 0.0f && collision.x > 0.0f)
+//            {
+//                velocity.y *= -1;
+//            }
+        }
     }
     std::vector<glm::vec4> edgeSet;
     std::vector<float> index;
@@ -457,6 +488,8 @@ public:
     float rotateAmount;
     float moveSpeed;
     float rotationSpeed;
+    
+    bool isEnable;
     
     glm::vec3 velocity;
     
@@ -491,7 +524,36 @@ class Play
 public:
     Play(unsigned int texture)
     {
-        InitialSetUp(texture);
+        p2Enable = false;
+        background = BackgroundEmitter(glm::vec3(0.0f, 0.0f, 0.0f), 4, std::pair<float,float>(1.0f, 1.77f), 1000);
+        screenShake = false;
+        screenTime = 0.0f;
+        player1 = Entity(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.132f, 0.1f, 0.0f), 0.0f, glm::vec3(1.0f, 1.0f, 1.0f), {SDL_SCANCODE_W, SDL_SCANCODE_S, SDL_SCANCODE_A, SDL_SCANCODE_D, SDL_SCANCODE_F}, PLAYER); // pos, size, rotation, up, down, rotateL, rotateR, Shoot
+        player2 = Entity(glm::vec3(0.25f, 0.0f, 0.0f), glm::vec3(0.132f, 0.1f, 0.0f), 0.0f, glm::vec3(1.0f, 1.0f, 1.0f), {SDL_SCANCODE_UP, SDL_SCANCODE_DOWN, SDL_SCANCODE_LEFT, SDL_SCANCODE_RIGHT, SDL_SCANCODE_SPACE}, PLAYER);
+        player1.sprite = SheetSprite(texture, 0.0f/1024.0f, 941.0f/1024.0f, 112.0f/1024.0f, 75.0f/1024.0f, 0.1f);
+        player1.setEdgeSet();
+        player1.shootSound = Mix_LoadWAV(RESOURCE_FOLDER"shoot2.wav");
+        player1.hitSound = Mix_LoadWAV(RESOURCE_FOLDER"hit.wav");
+        player1.deathSound = Mix_LoadWAV(RESOURCE_FOLDER"death.wav");
+        player2.sprite = SheetSprite(texture, 112.0f/1024.0f, 791.0f/1024.0f, 112.0f/1024.0f, 75.0f/1024.0f, 0.1f);
+        player2.setEdgeSet();
+        player2.shootSound = Mix_LoadWAV(RESOURCE_FOLDER"shoot2.wav");
+        player2.hitSound = Mix_LoadWAV(RESOURCE_FOLDER"hit.wav");
+        player2.deathSound = Mix_LoadWAV(RESOURCE_FOLDER"death2.wav");
+        max_bullets = 20;
+        bulletIndex = 0;
+        bullets = std::vector<Entity>(max_bullets);
+        SheetSprite bulletSprite = SheetSprite(texture, 856.0f/1024.0f, 602.0f/1024.0f, 9.0f/1024.0f, 37.0f/1024.0f, 0.1f);
+        for(int i=0; i < max_bullets; i++)
+        {
+            bullets[i] = Entity(glm::vec3(0.0f, -20.0f, 0.0f), glm::vec3(0.1f, 0.1f, 0.0f), 0.0f, glm::vec3(0.5f, 0.5f, 0.0f), BULLET);
+            bullets[i].sprite = bulletSprite;
+            bullets[i].setEdgeSet();
+        }
+        asteroidInitialization();
+        player1Score = 0;
+        player2Score = 0;
+        timer = 0.0f;
     }
     Entity player1;
     Entity player2;
@@ -505,64 +567,66 @@ public:
     bool reset;
     bool screenShake;
     float screenTime;
+    bool p2Enable;
+    float timer;
     BackgroundEmitter background;
-    void asteroidCreation()
+    std::vector<ParticleEmitter> collisions;
+    void player2Enable()
+    {
+        p2Enable = true;
+        player2.health = 5;
+        player1.position = glm::vec3(-0.25f, 0.0f, 0.0f);
+    }
+    void asteroidInitialization()
     {
         asteroids.clear();
         for(int i = 0; i < 5; i++)
         {
-            asteroids.push_back(Asteroid(glm::vec3(genRandom(-1,1), genRandom(-1,1), 0.0f), glm::vec3(genRandom(0.1, 0.5), genRandom(0.1,0.5), 0.5f), 0.0f, {
-                -0.5f, -0.5f,
-                0.5f, -0.5f,
-                0.5f, 0.5f,
-                -0.5f, 0.5f
-            }));
-            asteroids[i].velocity = glm::vec3(genRandom(-1,1), genRandom(-1, 1), 0.0f);
-            asteroids[i].rotation = genRandom(0, 360);
-            asteroids[i].setEdgeSet();
+            asteroidCreation();
         }
     }
-    void InitialSetUp(unsigned int texture)
+    void asteroidCreation()
     {
-        background = BackgroundEmitter(glm::vec3(0.0f, 0.0f, 0.0f), 4, std::pair<float,float>(1.0f, 1.77f), 1000);
-        screenShake = false;
-        screenTime = 0.0f;
-        player1 = Entity(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.132f, 0.1f, 0.0f), 0.0f, glm::vec3(1.0f, 1.0f, 1.0f), {SDL_SCANCODE_W, SDL_SCANCODE_S, SDL_SCANCODE_A, SDL_SCANCODE_D, SDL_SCANCODE_F}, PLAYER); // pos, size, rotation, up, down, left, right, rLeft, rRight
-        player2 = Entity(glm::vec3(0.25f, 0.0f, 0.0f), glm::vec3(0.132f, 0.1f, 0.0f), 0.0f, glm::vec3(1.0f, 1.0f, 1.0f), {SDL_SCANCODE_UP, SDL_SCANCODE_DOWN, SDL_SCANCODE_LEFT, SDL_SCANCODE_RIGHT, SDL_SCANCODE_SPACE}, PLAYER);
-        player1.sprite = SheetSprite(texture, 0.0f/1024.0f, 941.0f/1024.0f, 112.0f/1024.0f, 75.0f/1024.0f, 0.1f);
-        player1.setEdgeSet();
-        player1.shootSound = Mix_LoadWAV(RESOURCE_FOLDER"shoot2.wav");
-        player1.hitSound = Mix_LoadWAV(RESOURCE_FOLDER"hit.wav");
-        player2.sprite = SheetSprite(texture, 112.0f/1024.0f, 791.0f/1024.0f, 112.0f/1024.0f, 75.0f/1024.0f, 0.1f);
-        player2.setEdgeSet();
-        player2.shootSound = Mix_LoadWAV(RESOURCE_FOLDER"shoot2.wav");
-        player2.hitSound = Mix_LoadWAV(RESOURCE_FOLDER"hit.wav");
-        if(p2Enabled)
+        float posX = -1.77f;
+        float posY = -1.0f;
+        if(genRandom(0, 1) > 0.5f)
         {
-            player1.position = glm::vec3(-0.25f, 0.0f, 0.0f);
+            posX = genRandom(1.5f, 1.75f);
         }
-        max_bullets = 20;
-        bulletIndex = 0;
-        bullets = std::vector<Entity>(max_bullets);
-        SheetSprite bulletSprite = SheetSprite(texture, 856.0f/1024.0f, 602.0f/1024.0f, 9.0f/1024.0f, 37.0f/1024.0f, 0.1f);
-        for(int i=0; i < max_bullets; i++)
+        else
         {
-            bullets[i] = Entity(glm::vec3(0.0f, -20.0f, 0.0f), glm::vec3(0.1f, 0.1f, 0.0f), 0.0f, glm::vec3(0.5f, 0.5f, 0.0f), BULLET);
-            bullets[i].sprite = bulletSprite;
-            bullets[i].setEdgeSet();
+            posX = genRandom(-1.75f, -1.5f);
         }
-        asteroidCreation();
-        player1Score = 0;
-        player2Score = 0;
+        if(genRandom(0, 1) > 0.5f)
+        {
+            posY = genRandom(0.8f, 0.95f);
+        }
+        else
+        {
+            posY = genRandom(-0.95f, -0.8f);
+        }
+        asteroids.push_back(Asteroid(glm::vec3(posX, posY, 0.0f), glm::vec3(genRandom(0.1, 0.5), genRandom(0.1,0.5), 0.5f),
+                                     genRandom(0, 360), glm::vec3(genRandom(-0.5f, 0.5f), genRandom(-0.5f, 0.5f), 0.0f), {
+            -0.5f, -0.5f,
+            0.5f, -0.5f,
+            0.5f, 0.5f,
+            -0.5f, 0.5f
+        }));
     }
     void Reset()
     {
-        player1.position = glm::vec3(0.0f, 0.0f, 0.0f);
-        if(p2Enabled)
+        player1.health = 5;
+        player2.health = 5;
+        player2.position = glm::vec3(0.25f, 0.0f, 0.0f);
+        player2.velocity = glm::vec3(0.0f, 0.0f, 0.0f);
+        player2.rotation = 0.0f;
+        if(p2Enable)
         {
-            player2.position = glm::vec3(0.25f, 0.0f, 0.0f);
             player1.position = glm::vec3(-0.25f, 0.0f, 0.0f);
         }
+        player1.position = glm::vec3(0.0f, 0.0f, 0.0f);
+        player1.rotation = 0.0f;
+        player1.velocity = glm::vec3(0.0f, 0.0f, 0.0f);
         asteroidCreation();
     }
     void Render(ShaderProgram& program, ShaderProgram& untextProgram, glm::mat4 viewMatrix)
@@ -583,13 +647,24 @@ public:
         }
         glUseProgram(untextProgram.programID);
         background.Render(untextProgram);
+        for(ParticleEmitter& emitters : collisions)
+        {
+            if(emitters.enable)
+            {
+                emitters.Render(program);
+            }
+        }
         for(Asteroid& asteroid : asteroids)
         {
-            asteroid.Render(untextProgram);
+            if(asteroid.isEnable)
+            {
+                asteroid.Render(untextProgram);
+            }
         }
         glUseProgram(program.programID);
         player1.Render(program);
-        if(p2Enabled){
+        if(p2Enable)
+        {
             player2.Render(program);
         }
         for(Entity& bullet : bullets)
@@ -600,35 +675,57 @@ public:
     }
     void Update(float elapsed)
     {
+        timer += elapsed;
+        if(timer > genRandom(4, 8))
+        {
+            asteroidCreation();
+            timer = 0.0f;
+        }
         screenTime += elapsed;
-        if(screenTime > 0.05f)
+        if(screenTime > 0.1f)
         {
             screenShake = false;
             screenTime = 0.0f;
         }
         background.Update(elapsed);
-        //collisions and health updates
+        for(ParticleEmitter& emitter : collisions)
+        {
+            if(emitter.enable)
+            {
+                emitter.Update(elapsed);
+            }
+        }
         for(Asteroid& check : asteroids)
         {
+            if(!check.isEnable)
+            {
+                continue;
+            }
             std::pair<float,float> penetration;
             CheckSATCollision(floatPairs(check.transformEdgeSet()), floatPairs(player1.transformEdgeSet()), penetration);
             if(penetration.first != 0 && penetration.second != 0)
             {
                 screenShake = true;
-                glm::vec4 penValues = glm::vec4(penetration.first, penetration.second, 1.0f, 1.0f);
-                check.collisionUpdate(penValues);
                 player1.collisionUpdate();
+                check.isEnable = false;
             }
-            if(p2Enabled)
+            if(!check.isEnable)
+            {
+                continue;
+            }
+            if(p2Enable)
             {
                 CheckSATCollision(floatPairs(check.transformEdgeSet()), floatPairs(player2.transformEdgeSet()), penetration);
                 if(penetration.first != 0 && penetration.second != 0)
                 {
                     screenShake = true;
-                    glm::vec4 penValues = glm::vec4(penetration.first, penetration.second, 1.0f, 1.0f);
-                    check.collisionUpdate(penValues);
                     player2.collisionUpdate();
+                    check.isEnable = false;
                 }
+            }
+            if(!check.isEnable)
+            {
+                continue;
             }
             for(Entity& bullet : bullets)
             {
@@ -637,35 +734,62 @@ public:
                     CheckSATCollision(floatPairs(check.transformEdgeSet()), floatPairs(bullet.transformEdgeSet()), penetration);
                     if(penetration.first != 0 && penetration.second != 0)
                     {
-                        glm::vec4 penValues = glm::vec4(penetration.first, penetration.second, 1.0f, 1.0f);
-                        check.collisionUpdate(penValues);
+                        check.isEnable = false;
+                        player1Score += 10;
                         bullet.collisionUpdate();
-//                        search instead or just disable
-//                        asteroids.erase(std::remove_if(asteroids.begin(), asteroids.end(), check), asteroids.end());
                     }
                 }
             }
+            if(!check.isEnable)
+            {
+                continue;
+            }
             for(Asteroid& asteroid : asteroids)
             {
-                if(asteroid != check)
+                if(asteroid != check && asteroid.isEnable)
                 {
                     CheckSATCollision(floatPairs(check.transformEdgeSet()), floatPairs(asteroid.transformEdgeSet()), penetration);
                     if(penetration.first != 0 && penetration.second != 0)
                     {
                         glm::vec4 penValues = glm::vec4(penetration.first, penetration.second, 1.0f, 1.0f);
+                        collisions.push_back(ParticleEmitter(glm::vec3(penValues.x, penValues.y, 0.0f), 1.0f, 1.0f, 50, glm::vec4(1.0f, 0.5f, 0.0f, 1.0f), glm::vec4(0.0f, 0.0f, 0.0f, 1.0f)));
                         check.collisionUpdate(penValues);
                         asteroid.collisionUpdate(penValues);
                     }
                 }
             }
+            if(!check.isEnable)
+            {
+                continue;
+            }
         }
         player1.Update(elapsed);
-        if(p2Enabled){
-            player2.Update(elapsed);
+        if(player1.health < 0)
+        {
+            Mix_PlayChannel(-1, player1.deathSound, 0);
+            gameMode = END_GAME_SCREEN;
         }
+        if(p2Enable)
+        {
+            player2.Update(elapsed);
+            if(player2.health < 0)
+            {
+                Mix_PlayChannel(-1, player2.deathSound, 0);
+                gameMode = END_GAME_SCREEN;
+            }
+        }
+        bool gameOverTest = true;
         for(Asteroid& asteroid : asteroids)
         {
-            asteroid.Update(elapsed);
+            if(asteroid.isEnable)
+            {
+                gameOverTest = false;
+                asteroid.Update(elapsed);
+            }
+        }
+        if(gameOverTest)
+        {
+            gameMode = END_GAME_SCREEN;
         }
         for(Entity& bullet : bullets)
         {
@@ -674,31 +798,24 @@ public:
     }
     void shoot(Entity& entity)
     {
-        bullets[bulletIndex].position = entity.position;
-        bullets[bulletIndex].velocity = glm::vec3(cos(entity.rotation+glm::pi<float>()/2)*2.5f, sin(entity.rotation+glm::pi<float>()/2)*2.5f, 0.0f);
-        bullets[bulletIndex].rotation = entity.rotation;
-        bulletIndex++;
-        if(bulletIndex >= max_bullets)
+        if(entity.shoot)
         {
-            bulletIndex = 0;
+            Mix_PlayChannel(-1, entity.shootSound, 0);
+            bullets[bulletIndex].position = entity.position;
+            bullets[bulletIndex].velocity = glm::vec3(cos(entity.rotation+glm::pi<float>()/2)*2.5f, sin(entity.rotation+glm::pi<float>()/2)*2.5f, 0.0f);
+            bullets[bulletIndex].rotation = entity.rotation;
+            bulletIndex++;
+            if(bulletIndex >= max_bullets)
+            {
+                bulletIndex = 0;
+            }
+            entity.shoot = false;
         }
-        entity.shoot = false;
     }
     void ProcessInput(const Uint8* keys)
     {
         player1.Process(keys);
-        if(player1.shoot)
-        {
-            shoot(player1);
-        }
-        if(p2Enabled)
-        {
-            player2.Process(keys);
-            if(player2.shoot)
-            {
-                shoot(player2);
-            }
-        }
+        player2.Process(keys);
     }
 private:
 };
@@ -721,6 +838,47 @@ public:
         DrawText(program, fontSheet, "1 Player", 0.15f, 0.00005f, glm::vec3(-1.5f, -0.75f, 0.0f));
         DrawText(program, fontSheet, "2 Player", 0.15f, 0.00005f, glm::vec3(0.25f, -0.75f, 0.0f));
     }
+    void InstructionsRender(ShaderProgram& program, int fontSheet, Play& game)
+    {
+        DrawText(program, fontSheet, "Instructions:", 0.25f, 0.0005f, glm::vec3(-1.5f, 0.7f, 0.0f));
+        if(game.p2Enable)
+        {
+            DrawText(program, fontSheet, "Player 1:", 0.1f, 0.000000001f, glm::vec3(-1.7f, 0.5f, 0.0f));
+            DrawText(program, fontSheet, "Move Forward:W", 0.1f, 0.000000001f, glm::vec3(-1.7f, 0.35f, 0.0f));
+            DrawText(program, fontSheet, "Move Backward:S", 0.1f, 0.000000001f, glm::vec3(-1.7f, 0.2f, 0.0f));
+            DrawText(program, fontSheet, "Rotate Left:A", 0.1f, 0.000000001f, glm::vec3(-1.7f, 0.05f, 0.0f));
+            DrawText(program, fontSheet, "Rotate Right:D", 0.1f, 0.000000001f, glm::vec3(-1.7f, -0.1f, 0.0f));
+            
+            DrawText(program, fontSheet, "Player 2:", 0.1f, 0.000000001f, glm::vec3(-0.1f, 0.5f, 0.0f));
+            DrawText(program, fontSheet, "Move Forward:Up", 0.1f, 0.000000001f, glm::vec3(-0.1f, 0.35f, 0.0f));
+            DrawText(program, fontSheet, "Move Backward:Down", 0.1f, 0.000000001f, glm::vec3(-0.1f, 0.2f, 0.0f));
+            DrawText(program, fontSheet, "Rotate Left:Left", 0.1f, 0.000000001f, glm::vec3(-0.1f, 0.05f, 0.0f));
+            DrawText(program, fontSheet, "Rotate Right:Right", 0.1f, 0.000000001f, glm::vec3(-0.1f, -0.1f, 0.0f));
+        }
+        else
+        {
+            DrawText(program, fontSheet, "Move Forward:W", 0.15f, 0.000000001f, glm::vec3(-1.25f, 0.35f, 0.0f));
+            DrawText(program, fontSheet, "Move Backward:S", 0.15f, 0.000000001f, glm::vec3(-1.25f, 0.2f, 0.0f));
+            DrawText(program, fontSheet, "Rotate Left:A", 0.15f, 0.000000001f, glm::vec3(-1.25f, 0.05f, 0.0f));
+            DrawText(program, fontSheet, "Rotate Right:D", 0.15f, 0.000000001f, glm::vec3(-1.25f, -0.1f, 0.0f));
+        }
+        DrawText(program, fontSheet, "Press Q to Quit", 0.15f, 0.00005f, glm::vec3(-1.25f, -0.35f, 0.0f));
+        DrawText(program, fontSheet, "Continue to Game", 0.15f, 0.00005f, glm::vec3(-1.25f, -0.55f, 0.0f));
+        DrawText(program, fontSheet, "Return to Main Menu", 0.15f, 0.00005f, glm::vec3(-1.25f, -0.75f, 0.0f));
+        
+    }
+    void InstructionsProcess(float xPos, float yPos)
+    {
+        if(xPos > -1.25 && xPos < 1.25 && yPos <-0.55 && yPos > -0.75)
+        {
+            gameMode = MAIN_GAME_SCREEN;
+        }
+        if(xPos > -1.25 && xPos < 1.25 && yPos <-0.75)
+        {
+            gameMode = START_SCREEN;
+        }
+    }
+
     void EndMenuRender(ShaderProgram& program, int fontSheet, Play& game)
     {
         DrawText(program, fontSheet, "Game Over", 0.25f, 0.0005f, glm::vec3(-1.0f, 0.7f, 0.0f));
@@ -731,7 +889,6 @@ public:
             DrawText(program, fontSheet, std::to_string(game.player1Score), 0.2f, 0.0005f, glm::vec3(0.4f, 0.3f, 0.0f));
             DrawText(program, fontSheet, "Player2: ", 0.15f, 0.0005f, glm::vec3(-0.8f, 0.1f, 0.0f));
             DrawText(program, fontSheet, std::to_string(game.player2Score), 0.2f, 0.0005f, glm::vec3(0.4f, 0.1f, 0.0f));
-
         }
         else
         {
@@ -743,26 +900,22 @@ public:
     }
     void MainMenuProcess(float xPos, float yPos, Play& game)
     {
-        if(xPos < 0.0f)
+        if(xPos > 0.0f)
         {
-            game.p2Enabled = false;
-            gameMode = MAIN_GAME_SCREEN;
+            game.player2Enable();
         }
-        else
-        {
-            game.p2Enabled = true;
-            gameMode = MAIN_GAME_SCREEN;
-        }
+        gameMode = INSTRUCTION_SCREEN;
     }
     void EndMenuProcess(float xPos, float yPos, Play& game)
     {
+        game.Reset();
         if(yPos > -0.45f)
         {
-            game.Reset();
             gameMode = MAIN_GAME_SCREEN;
         }
         else
         {
+            game.p2Enable = false;
             gameMode = START_SCREEN;
         }
     }
@@ -847,11 +1000,25 @@ int main(int argc, char *argv[])
                         case START_SCREEN:
                             menus.MainMenuProcess(unitX, unitY, game);
                             break;
+                        case INSTRUCTION_SCREEN:
+                            menus.InstructionsProcess(unitX, unitY);
+                            break;
                         case MAIN_GAME_SCREEN: break;
                         case END_GAME_SCREEN:
                             menus.EndMenuProcess(unitX, unitY, game);
                             break;
                     }
+                }
+            }
+            else if (event.type == SDL_KEYDOWN)
+            {
+                if(event.key.keysym.scancode == game.player1.sCodes[4])
+                {
+                    game.shoot(game.player1);
+                }
+                if(event.key.keysym.scancode == game.player2.sCodes[4])
+                {
+                    game.shoot(game.player2);
                 }
             }
         }
@@ -879,6 +1046,7 @@ int main(int argc, char *argv[])
             switch(gameMode)
             {
                 case START_SCREEN: break;
+                case INSTRUCTION_SCREEN: break;
                 case MAIN_GAME_SCREEN:
                     game.Update(FIXED_TIMESTEP);
                     break;
@@ -905,6 +1073,9 @@ int main(int argc, char *argv[])
             case START_SCREEN:
                 menus.MainMenuRender(program, fontSheet);
                 break;
+            case INSTRUCTION_SCREEN:
+                menus.InstructionsRender(program, fontSheet, game);
+                break;
             case MAIN_GAME_SCREEN:
                 game.ProcessInput(keys);
                 game.Render(program, programU, viewMatrix);
@@ -913,12 +1084,7 @@ int main(int argc, char *argv[])
                 menus.EndMenuRender(program, fontSheet, game);
                 break;
         }
-
-        // PUT STUFF HERE
-        
         SDL_GL_SwapWindow(displayWindow);
-        
-        //PUT STUFF HERE
     }
     
     SDL_Quit();
@@ -994,13 +1160,8 @@ const std::vector<std::pair<float, float>> floatPairs(std::vector<glm::vec4> ver
     std::vector<std::pair<float, float>> pairs;
     for(int pair = 0; pair < vertices.size(); pair++)
     {
-//        std::cout << vertices[pair].x << " " << vertices[pair].y << std::endl;
         std::pair<float, float> temp = { vertices[pair].x, vertices[pair].y};
         pairs.push_back(temp);
     }
-//    for(int pair = 0; pair < pairs.size(); pair++)
-//    {
-//        std::cout << pairs[pair].first << " " << pairs[pair].second << std::endl;
-//    }
     return pairs;
 }
