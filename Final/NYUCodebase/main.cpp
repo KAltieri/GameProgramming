@@ -216,6 +216,7 @@ public:
         acceleration = defaultSet;
         time = 0.0f;
         health = 5;
+        rotateAmount = 0.0f;
     }
     void setEdgeSet()
     {
@@ -529,6 +530,14 @@ public:
         p2Enable = true;
         player2.health = 5;
         player1.position = glm::vec3(-0.25f, 0.0f, 0.0f);
+//        std::cout << "Position: " << player2.position.x << ", " << player2.position.y << ", " << player2.position.z << std::endl;
+//        std::cout << "Rotation: " << player2.rotation << ", Rotation Amount: " << player2.rotateAmount << std::endl;
+//        std::cout << "Health: " << player2.health << ", Score: " << player2Score << std::endl;
+//        std::cout << "Edge Set: " << player2.edgeSet[0].x << ", " << player2.edgeSet[0].y << ", " << player2.edgeSet[0].z << std::endl;
+//        std::cout << "Edge Set: " << player2.edgeSet[1].x << ", " << player2.edgeSet[1].y << ", " << player2.edgeSet[1].z << std::endl;
+//        std::cout << "Edge Set: " << player2.edgeSet[2].x << ", " << player2.edgeSet[2].y << ", " << player2.edgeSet[2].z << std::endl;
+//        std::cout << "Edge Set: " << player2.edgeSet[3].x << ", " << player2.edgeSet[3].y << ", " << player2.edgeSet[3].z << std::endl;
+//        std::cout << "Enabled: " << std::boolalpha << p2Enable << std::endl;
     }
     void asteroidInitialization()
     {
@@ -676,15 +685,16 @@ public:
             {
                 continue;
             }
-//            if(p2Enable)
-//            {
-//                if(CheckSATCollision(floatPairs(check.transformEdgeSet()), floatPairs(player2.transformEdgeSet()), penetration))
-//                {
-//                    screenShake = true;
-//                    player2.collisionUpdate();
-//                    check.isEnable = false;
-//                }
-//            }
+            if(p2Enable)
+            {
+                if(CheckSATCollision(floatPairs(check.transformEdgeSet()), floatPairs(player2.transformEdgeSet()), penetration))
+                {
+                    std::cout << penetration.first << " " << penetration.second << " " << timer << std::endl;
+                    screenShake = true;
+                    player2.collisionUpdate();
+                    check.isEnable = false;
+                }
+            }
             if(!check.isEnable)
             {
                 continue;
