@@ -197,6 +197,7 @@ public:
         glm::vec3 defaultSet = glm::vec3(0.0f, 0.0f, 0.0f);
         velocity = defaultSet;
         acceleration = defaultSet;
+        playerTag = -1;
     }
     Entity(glm::vec3 position, glm::vec3 size, float rotation, glm::vec3 friction, std::vector<SDL_Scancode> keys, EntityType type) : position(position), size(size), rotation(rotation), friction(friction), type(type)
     {
@@ -217,6 +218,7 @@ public:
         time = 0.0f;
         health = 5;
         rotateAmount = 0.0f;
+        playerTag = 1;
     }
     void setEdgeSet()
     {
@@ -344,6 +346,7 @@ public:
     std::vector<SDL_Scancode> sCodes;
     
     EntityType type;
+    int playerTag;
     
     SheetSprite sprite;
     
@@ -488,6 +491,7 @@ public:
         player1.deathSound = Mix_LoadWAV(RESOURCE_FOLDER"death.wav");
         player2.sprite = SheetSprite(texture, 112.0f/1024.0f, 791.0f/1024.0f, 112.0f/1024.0f, 75.0f/1024.0f, 0.1f);
         player2.setEdgeSet();
+        player2.playerTag = 2;
         player2.shootSound = Mix_LoadWAV(RESOURCE_FOLDER"shoot2.wav");
         player2.hitSound = Mix_LoadWAV(RESOURCE_FOLDER"hit.wav");
         player2.deathSound = Mix_LoadWAV(RESOURCE_FOLDER"death2.wav");
@@ -530,14 +534,6 @@ public:
         p2Enable = true;
         player2.health = 5;
         player1.position = glm::vec3(-0.25f, 0.0f, 0.0f);
-//        std::cout << "Position: " << player2.position.x << ", " << player2.position.y << ", " << player2.position.z << std::endl;
-//        std::cout << "Rotation: " << player2.rotation << ", Rotation Amount: " << player2.rotateAmount << std::endl;
-//        std::cout << "Health: " << player2.health << ", Score: " << player2Score << std::endl;
-//        std::cout << "Edge Set: " << player2.edgeSet[0].x << ", " << player2.edgeSet[0].y << ", " << player2.edgeSet[0].z << std::endl;
-//        std::cout << "Edge Set: " << player2.edgeSet[1].x << ", " << player2.edgeSet[1].y << ", " << player2.edgeSet[1].z << std::endl;
-//        std::cout << "Edge Set: " << player2.edgeSet[2].x << ", " << player2.edgeSet[2].y << ", " << player2.edgeSet[2].z << std::endl;
-//        std::cout << "Edge Set: " << player2.edgeSet[3].x << ", " << player2.edgeSet[3].y << ", " << player2.edgeSet[3].z << std::endl;
-//        std::cout << "Enabled: " << std::boolalpha << p2Enable << std::endl;
     }
     void asteroidInitialization()
     {
@@ -590,8 +586,6 @@ public:
         {
             asteroidCreation();
         }
-        player1Score = 0;
-        player2Score = 0;
     }
     void Render(ShaderProgram& program, ShaderProgram& untextProgram, glm::mat4 viewMatrix)
     {
@@ -705,8 +699,15 @@ public:
                 {
                     if(CheckSATCollision(floatPairs(check.transformEdgeSet()), floatPairs(bullet.transformEdgeSet()), penetration))
                     {
+                        if(bullet.playerTag == 1)
+                        {
+                            player1Score += 10;
+                        }
+                        if(bullet.playerTag == 2)
+                        {
+                            player2Score += 10;
+                        }
                         check.isEnable = false;
-                        player1Score += 10;
                         bullet.collisionUpdate();
                     }
                 }
@@ -774,6 +775,7 @@ public:
             bullets[bulletIndex].position = entity.position;
             bullets[bulletIndex].velocity = glm::vec3(cos(entity.rotation+glm::pi<float>()/2)*2.5f, sin(entity.rotation+glm::pi<float>()/2)*2.5f, 0.0f);
             bullets[bulletIndex].rotation = entity.rotation;
+            bullets[bulletIndex].playerTag = entity.playerTag;
             bulletIndex++;
             if(bulletIndex >= max_bullets)
             {
@@ -890,10 +892,14 @@ public:
     {
         if(yPos > -0.5f && yPos < 0.0f)
         {
+            game.player1Score = 0;
+            game.player2Score = 0;
             gameMode = MAIN_GAME_SCREEN;
         }
         if(yPos < -0.5f)
         {
+            game.player1Score = 0;
+            game.player2Score = 0;
             game.p2Enable = false;
             gameMode = START_SCREEN;
         }
